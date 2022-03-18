@@ -218,7 +218,7 @@ class PatchEmbed(nn.Module):
         x = self.proj(x)
         nx, ny = x.shape[-2:]
         x = x.flatten(2).transpose(1, 2)
-        assert nx == self.nx and ny == self.ny, "Fix input size!"
+        assert nx == self.nx and ny == self.ny, "Fix input size! {} - {} and {} - {}".format(nx, self.nx, ny, self.ny)
 
         if self.norm_embed:
             x = self.norm_embed(x)
@@ -363,7 +363,7 @@ class MsViTAA(nn.Module):
     """ Multiscale Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self, arch, img_size=512, in_chans=3,
+    def __init__(self, arch, img_size=56, in_chans=3,
                  num_classes=1000,
                  qkv_bias=True, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
@@ -415,8 +415,9 @@ class MsViTAA(nn.Module):
             'drop': drop_rate,
         })
 
-        self.Nx = img_size
-        self.Ny = img_size
+        #Attention input image dimension, this must match resnet output dimention
+        self.Nx = 56
+        self.Ny = 56
 
         def parse_arch(arch):
             layer_cfgs = []
@@ -466,28 +467,29 @@ class MsViTAA(nn.Module):
         # Atten layers to replace CONV
         self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
                                        dprs=dprs[0], layerid=1)
+
         # Atten Layers
-        self.attn_layer1 = self._make_layer(in_chans, self.layer_cfgs[0],
-                                       dprs=dprs[0], layerid=1)
-        self.attn_layer2 = self._make_layer(self.layer_cfgs[0]['d'],
-                                       self.layer_cfgs[1], dprs=dprs[1],
-                                       layerid=2)
-        self.attn_layer3 = self._make_layer(self.layer_cfgs[1]['d'],
-                                       self.layer_cfgs[2], dprs=dprs[2],
-                                       layerid=3)
-        if self.num_layers == 3:
-            self.attn_layer4 = None
-        elif self.num_layers == 4:
-            self.attn_layer4 = self._make_layer(self.layer_cfgs[2]['d'],
-                                           self.layer_cfgs[3], dprs=dprs[3],
-                                           layerid=4)
-        else:
-            raise ValueError("Numer of layers {} not implemented yet!".format(self.num_layers))
+        # self.attn_layer1 = self._make_layer(in_chans, self.layer_cfgs[0],
+        #                                dprs=dprs[0], layerid=1)
+        # self.attn_layer2 = self._make_layer(self.layer_cfgs[0]['d'],
+        #                                self.layer_cfgs[1], dprs=dprs[1],
+        #                                layerid=2)
+        # self.attn_layer3 = self._make_layer(self.layer_cfgs[1]['d'],
+        #                                self.layer_cfgs[2], dprs=dprs[2],
+        #                                layerid=3)
+        # if self.num_layers == 3:
+        #     self.attn_layer4 = None
+        # elif self.num_layers == 4:
+        #     self.attn_layer4 = self._make_layer(self.layer_cfgs[2]['d'],
+        #                                    self.layer_cfgs[3], dprs=dprs[3],
+        #                                    layerid=4)
+        # else:
+        #     raise ValueError("Numer of layers {} not implemented yet!".format(self.num_layers))
         self.norm = norm_layer(self.out_planes)
 
         # Classifier head
-        self.head = nn.Linear(self.out_planes,
-                              num_classes) if num_classes > 0 else nn.Identity()
+        # self.head = nn.Linear(self.out_planes,
+        #                       num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
     
@@ -583,46 +585,57 @@ class MsViTAA(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def forward_features(self, x):
+    # Reference code
+    # def forward_features(self, x):
+    #     B = x.shape[0]
+    #     x, nx, ny = self.attn_layer1((x, None, None))
+    #     x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
+
+    #     x, nx, ny = self.attn_layer2((x, nx, ny))
+    #     x = x[:, self.Nglos[1]:].transpose(-2, -1).reshape(B, -1, nx, ny)
+
+    #     x, nx, ny = self.attn_layer3((x, nx, ny))
+    #     if self.attn_layer4 is not None:
+    #         x = x[:, self.Nglos[2]:].transpose(-2, -1).reshape(B, -1, nx, ny)
+    #         x, nx, ny = self.attn_layer4((x, nx, ny))
+
+    #     x = self.norm(x)
+
+    #     if self.Nglos[-1] > 0 and (not self.avg_pool):
+    #         return x[:, 0]
+    #     else:
+    #         return torch.mean(x, dim=1)
+
+    # def _forward_resnet(self, x):
+    #     # See note [TorchScript super()]
+    #     x = self.conv1(x)
+    #     x = self.bn1(x)
+    #     x = self.relu(x)
+    #     x = self.maxpool(x)
+
+    #     x = self.res_layer1(x)
+    #     x = self.res_layer2(x)
+    #     x = self.res_layer3(x)
+    #     x = self.res_layer4(x)
+
+    #     x = self.avgpool(x)
+    #     x = torch.flatten(x, 1)
+    #     x = self.fc(x)
+
+    #     return x
+
+    def _forward_aa(self, x):
         B = x.shape[0]
-        x, nx, ny = self.attn_layer1((x, None, None))
-        x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
-        x, nx, ny = self.attn_layer2((x, nx, ny))
-        x = x[:, self.Nglos[1]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
-        x, nx, ny = self.attn_layer3((x, nx, ny))
-        if self.attn_layer4 is not None:
-            x = x[:, self.Nglos[2]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-            x, nx, ny = self.attn_layer4((x, nx, ny))
-
+        x, nx, ny = self.aa_layer1((x, None, None))
         x = self.norm(x)
 
-        if self.Nglos[-1] > 0 and (not self.avg_pool):
-            return x[:, 0]
-        else:
-            return torch.mean(x, dim=1)
-
-    def _forward_resnet(self, x):
-        # See note [TorchScript super()]
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.res_layer1(x)
-        x = self.res_layer2(x)
-        x = self.res_layer3(x)
-        x = self.res_layer4(x)
-
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
+        x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
 
         return x
 
     def _forward_aa_resnet(self, x):
         # See note [TorchScript super()]
+
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -630,11 +643,7 @@ class MsViTAA(nn.Module):
 
         x = self.res_layer1(x)
 
-        B = x.shape[0]
-        x, nx, ny = self.aa_layer1((x, None, None))
-        x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
-        x = self.norm(x)
+        x = self._forward_aa(x)
 
         #x = self.res_layer2(x)
         x = self.res_layer3(x)
@@ -683,6 +692,7 @@ class MsViTAA(nn.Module):
 
         #raw resnet forward path
         #x = self._forward_resnet(x)
+        
         #AA forward
         x = self._forward_aa_resnet(x)
         return x
