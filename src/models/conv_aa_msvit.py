@@ -369,6 +369,7 @@ class MsViTAA(nn.Module):
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
                  norm_embed=False, w=7, d=1, sharew=False, only_glo=False,
                  share_kv=False,
+                 zero_init_residual=False,
                  attn_type='longformerhand', sw_exact=0, mode=0, **args):
         super().__init__()
         self.num_classes = num_classes
@@ -416,8 +417,8 @@ class MsViTAA(nn.Module):
         })
 
         #Attention input image dimension, this must match resnet output dimention
-        self.Nx = 56
-        self.Ny = 56
+        self.Nx = 28
+        self.Ny = 28
 
         def parse_arch(arch):
             layer_cfgs = []
@@ -464,34 +465,37 @@ class MsViTAA(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
+        self._init_resnet_weights(zero_init_residual)
+
+        #Conv layer to make sure dimension of attention output match resnet conv output
+        self.qkv_conv = conv3x3(64, 64, 2)
         # Atten layers to replace CONV
         self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
                                        dprs=dprs[0], layerid=1)
-
-        # Atten Layers
-        # self.attn_layer1 = self._make_layer(in_chans, self.layer_cfgs[0],
-        #                                dprs=dprs[0], layerid=1)
-        # self.attn_layer2 = self._make_layer(self.layer_cfgs[0]['d'],
-        #                                self.layer_cfgs[1], dprs=dprs[1],
-        #                                layerid=2)
-        # self.attn_layer3 = self._make_layer(self.layer_cfgs[1]['d'],
-        #                                self.layer_cfgs[2], dprs=dprs[2],
-        #                                layerid=3)
-        # if self.num_layers == 3:
-        #     self.attn_layer4 = None
-        # elif self.num_layers == 4:
-        #     self.attn_layer4 = self._make_layer(self.layer_cfgs[2]['d'],
-        #                                    self.layer_cfgs[3], dprs=dprs[3],
-        #                                    layerid=4)
-        # else:
-        #     raise ValueError("Numer of layers {} not implemented yet!".format(self.num_layers))
+        #Layer Norm
         self.norm = norm_layer(self.out_planes)
-
-        # Classifier head
-        # self.head = nn.Linear(self.out_planes,
-        #                       num_classes) if num_classes > 0 else nn.Identity()
+        #Projection layer of concat output
+        self.projection = conv1x1(256, 128)
 
         self.apply(self._init_weights)
+
+    def _init_resnet_weights(self, zero_init_residual):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+        # Zero-initialize the last BN in each residual branch,
+        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
+        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
+        if zero_init_residual:
+            for m in self.modules():
+                if isinstance(m, Bottleneck):
+                    nn.init.constant_(m.bn3.weight, 0)  # type: ignore[arg-type]
+                elif isinstance(m, BasicBlock):
+                    nn.init.constant_(m.bn2.weight, 0)  # type: ignore[arg-type]
     
     def _make_res_layer(
         self,
@@ -585,46 +589,7 @@ class MsViTAA(nn.Module):
     def get_classifier(self):
         return self.head
 
-    # Reference code
-    # def forward_features(self, x):
-    #     B = x.shape[0]
-    #     x, nx, ny = self.attn_layer1((x, None, None))
-    #     x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
-    #     x, nx, ny = self.attn_layer2((x, nx, ny))
-    #     x = x[:, self.Nglos[1]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
-    #     x, nx, ny = self.attn_layer3((x, nx, ny))
-    #     if self.attn_layer4 is not None:
-    #         x = x[:, self.Nglos[2]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-    #         x, nx, ny = self.attn_layer4((x, nx, ny))
-
-    #     x = self.norm(x)
-
-    #     if self.Nglos[-1] > 0 and (not self.avg_pool):
-    #         return x[:, 0]
-    #     else:
-    #         return torch.mean(x, dim=1)
-
-    # def _forward_resnet(self, x):
-    #     # See note [TorchScript super()]
-    #     x = self.conv1(x)
-    #     x = self.bn1(x)
-    #     x = self.relu(x)
-    #     x = self.maxpool(x)
-
-    #     x = self.res_layer1(x)
-    #     x = self.res_layer2(x)
-    #     x = self.res_layer3(x)
-    #     x = self.res_layer4(x)
-
-    #     x = self.avgpool(x)
-    #     x = torch.flatten(x, 1)
-    #     x = self.fc(x)
-
-    #     return x
-
-    def _forward_aa(self, x):
+    def _forward_attn(self, x):
         B = x.shape[0]
         x, nx, ny = self.aa_layer1((x, None, None))
         x = self.norm(x)
@@ -643,9 +608,13 @@ class MsViTAA(nn.Module):
 
         x = self.res_layer1(x)
 
-        x = self._forward_aa(x)
+        # Augment attention output and resnet layer output
+        atten_out = self._forward_attn(self.qkv_conv(x))
+        conv_out = self.res_layer2(x)
+        x = torch.cat((conv_out, atten_out), dim=1)
+        x = self.projection(x)
 
-        #x = self.res_layer2(x)
+        # continue resnet output
         x = self.res_layer3(x)
         x = self.res_layer4(x)
 
@@ -683,16 +652,6 @@ class MsViTAA(nn.Module):
         return
 
     def forward(self, x):
-
-        #raw attn foward path
-        # if self.attn_type == "performer" and self.auto_check_redraw:
-        #     self.check_redraw_projections()
-        # x = self.forward_features(x)
-        # x = self.head(x)
-
-        #raw resnet forward path
-        #x = self._forward_resnet(x)
-        
         #AA forward
         x = self._forward_aa_resnet(x)
         return x
