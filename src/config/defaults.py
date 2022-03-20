@@ -15,6 +15,7 @@ _C.INPUT = CN()
 _C.INPUT.MEAN = [0.485, 0.456, 0.406]
 _C.INPUT.STD = [0.229, 0.224, 0.225]
 _C.INPUT.IMAGE_SIZE = 224  # 299 for inception_v3
+_C.INPUT.ATTN_SIZE = 28  # 299 for inception_v3
 _C.INPUT.CROP_PCT = 0.875  # 0.816 for inception_v3
 _C.INPUT.INTERPOLATION = 2
 

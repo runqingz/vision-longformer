@@ -363,7 +363,7 @@ class MsViTAA(nn.Module):
     """ Multiscale Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self, arch, img_size=56, in_chans=3,
+    def __init__(self, arch, img_size=512, attn_size=64, in_chans=3,
                  num_classes=1000,
                  qkv_bias=True, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
@@ -417,9 +417,8 @@ class MsViTAA(nn.Module):
         })
 
         #Attention input image dimension, this must match resnet output dimention
-        self.Nx = 28
-        self.Ny = 28
-
+        self.Nx = attn_size
+        self.Ny = attn_size
         def parse_arch(arch):
             layer_cfgs = []
             for layer in arch.split('_'):
@@ -449,7 +448,7 @@ class MsViTAA(nn.Module):
         self.dilation = 1
         self.groups = 1
         self.base_width = 64
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(in_chans, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -607,7 +606,6 @@ class MsViTAA(nn.Module):
         x = self.maxpool(x)
 
         x = self.res_layer1(x)
-
         # Augment attention output and resnet layer output
         atten_out = self._forward_attn(self.qkv_conv(x))
         conv_out = self.res_layer2(x)

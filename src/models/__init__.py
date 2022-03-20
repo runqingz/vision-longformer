@@ -37,6 +37,7 @@ def build_model(cfg):
         logging.info("Use vision transformer model")
         args = dict(
             img_size=cfg.INPUT.IMAGE_SIZE,
+            attn_size=cfg.INPUT.ATTN_SIZE,
             drop_rate=cfg.MODEL.VIT.DROP,
             drop_path_rate=cfg.MODEL.VIT.DROP_PATH,
             norm_embed=cfg.MODEL.VIT.NORM_EMBED,
