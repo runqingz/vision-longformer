@@ -1,6 +1,7 @@
 import math
 from functools import partial
 import logging
+from tkinter import N
 import torch
 from torch import nn
 from timm.models.layers import DropPath, trunc_normal_, to_2tuple
@@ -12,7 +13,7 @@ from .layers import (
     SRSelfAttention
 )
 # from .longformer2d_cuda import Longformer2DSelfAttention
-from .resnet_reference import BasicBlock, Bottleneck
+from .resnet_aa import BasicBlock, Bottleneck, BasicAABlock
 from typing import Type, Any, Callable, Union, List, Optional
 
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
@@ -432,7 +433,7 @@ class MsViTAA(nn.Module):
         self.layer_cfgs = parse_arch(arch)
         self.num_layers = len(self.layer_cfgs)
         self.depth = sum([cfg['n'] for cfg in self.layer_cfgs])
-        self.out_planes = self.layer_cfgs[-1]['d']
+        #self.out_planes = self.layer_cfgs[-1]['d']
         self.Nglos = [cfg['g'] for cfg in self.layer_cfgs]
         self.avg_pool = args['avg_pool'] if 'avg_pool' in args else False
 
@@ -456,7 +457,11 @@ class MsViTAA(nn.Module):
         block = BasicBlock
         layers = [2, 2, 2, 2]
 
-        self.res_layer1 = self._make_res_layer(block, 64, layers[0])
+        self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
+                                       dprs=dprs[0], layerid=1)
+        self.norm = norm_layer(self.layer_cfgs[0]['d'])
+
+        self.res_layer1 = self._make_res_layer(BasicAABlock, 64, layers[0], attn_planes=self.layer_cfgs[0]['d'], attention=self.aa_layer1, attn_norm_layer=self.norm, Nglos=self.layer_cfgs[0]['g'])
         self.res_layer2 = self._make_res_layer(block, 128, layers[1], stride=2, dilate=False)
         self.res_layer3 = self._make_res_layer(block, 256, layers[2], stride=2, dilate=False)
         self.res_layer4 = self._make_res_layer(block, 512, layers[3], stride=2, dilate=False)
@@ -465,17 +470,6 @@ class MsViTAA(nn.Module):
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         self._init_resnet_weights(zero_init_residual)
-
-        #Conv layer to make sure dimension of attention output match resnet conv output
-        self.qkv_conv = conv3x3(64, 64, 2)
-        # Atten layers to replace CONV
-        self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
-                                       dprs=dprs[0], layerid=1)
-        #Layer Norm
-        self.norm = norm_layer(self.out_planes)
-        #Projection layer of concat output
-        self.projection = conv1x1(256, 128)
-
         self.apply(self._init_weights)
 
     def _init_resnet_weights(self, zero_init_residual):
@@ -498,9 +492,13 @@ class MsViTAA(nn.Module):
     
     def _make_res_layer(
         self,
-        block: Type[Union[BasicBlock, Bottleneck]],
+        block: Type[Union[BasicBlock, Bottleneck, BasicAABlock]],
         planes: int,
         blocks: int,
+        attn_planes: int = 64,
+        attention: nn.Module = None,
+        attn_norm_layer: nn.Module = None,
+        Nglos: int = 0,
         stride: int = 1,
         dilate: bool = False,
     ) -> nn.Sequential:
@@ -517,23 +515,72 @@ class MsViTAA(nn.Module):
             )
 
         layers = []
-        layers.append(
-            block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
-            )
-        )
-        self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
+        
+        if block is BasicAABlock:
+            '''
+            inplanes: int,
+            planes: int,
+            attn_planes: int,
+            attention: nn.Module,
+            attn_norm_layer: nn.Module,
+            Nglos: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            groups: int = 1,
+            base_width: int = 64,
+            dilation: int = 1,
+            norm_layer: Optional[Callable[..., nn.Module]] = None,
+            '''
             layers.append(
                 block(
                     self.inplanes,
-                    planes,
-                    groups=self.groups,
-                    base_width=self.base_width,
-                    dilation=self.dilation,
-                    norm_layer=norm_layer,
+                        planes,
+                        attn_planes,
+                        attention,
+                        attn_norm_layer,
+                        Nglos,
+                        stride,
+                        downsample,
+                        self.groups,
+                        self.base_width,
+                        previous_dilation,
+                        norm_layer
                 )
             )
+            self.inplanes = planes * block.expansion
+            for _ in range(1, blocks):
+                layers.append(
+                    block(
+                        self.inplanes,
+                        planes,
+                        attn_planes,
+                        attention,
+                        attn_norm_layer,
+                        Nglos,
+                        groups=self.groups,
+                        base_width=self.base_width,
+                        dilation=self.dilation,
+                        norm_layer=norm_layer,
+                    )
+                )
+        else:
+            layers.append(
+                block(
+                    self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
+                )
+            )
+            self.inplanes = planes * block.expansion
+            for _ in range(1, blocks):
+                layers.append(
+                    block(
+                        self.inplanes,
+                        planes,
+                        groups=self.groups,
+                        base_width=self.base_width,
+                        dilation=self.dilation,
+                        norm_layer=norm_layer,
+                    )
+                )
 
         return nn.Sequential(*layers)
 
@@ -588,16 +635,7 @@ class MsViTAA(nn.Module):
     def get_classifier(self):
         return self.head
 
-    def _forward_attn(self, x):
-        B = x.shape[0]
-        x, nx, ny = self.aa_layer1((x, None, None))
-        x = self.norm(x)
-
-        x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
-        return x
-
-    def _forward_aa_resnet(self, x):
+    def _forward_attn_resnet(self, x):
         # See note [TorchScript super()]
 
         x = self.conv1(x)
@@ -606,13 +644,7 @@ class MsViTAA(nn.Module):
         x = self.maxpool(x)
 
         x = self.res_layer1(x)
-        # Augment attention output and resnet layer output
-        atten_out = self._forward_attn(self.qkv_conv(x))
-        conv_out = self.res_layer2(x)
-        x = torch.cat((conv_out, atten_out), dim=1)
-        x = self.projection(x)
-
-        # continue resnet output
+        x = self.res_layer2(x)
         x = self.res_layer3(x)
         x = self.res_layer4(x)
 
@@ -621,7 +653,6 @@ class MsViTAA(nn.Module):
         x = self.fc(x)
 
         return x
-
 
     def check_redraw_projections(self):
         if not self.training:
@@ -651,5 +682,5 @@ class MsViTAA(nn.Module):
 
     def forward(self, x):
         #AA forward
-        x = self._forward_aa_resnet(x)
+        x = self._forward_attn_resnet(x)
         return x
