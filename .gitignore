@@ -51,3 +51,9 @@ src/utils/__pycache__/
 _ext
 *.pyc
 src/run_exp_multi_node.py
+
+# pycharm
+.DS_Store
+
+# custom
+cmd-example.txt

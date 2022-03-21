@@ -66,11 +66,14 @@ cfg.merge_from_file(args.config_file)
 cfg.merge_from_list(args.opts)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-assert (device == 'cuda')
-# Setup CUDA, GPU & distributed training
-args.num_gpus = int(
-    os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
-cfg.distributed = args.num_gpus > 1
+if device == 'cuda':
+    # Setup CUDA, GPU & distributed training
+    args.num_gpus = int(
+        os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
+    cfg.distributed = args.num_gpus > 1
+else:
+    args.num_gpus = 0
+    cfg.distributed = args.num_gpus > 1
 
 if args.local_rank == -1:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
