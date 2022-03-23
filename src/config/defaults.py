@@ -15,7 +15,7 @@ _C.INPUT = CN()
 _C.INPUT.MEAN = [0.485, 0.456, 0.406]
 _C.INPUT.STD = [0.229, 0.224, 0.225]
 _C.INPUT.IMAGE_SIZE = 224  # 299 for inception_v3
-_C.INPUT.ATTN_SIZE = 28  # 299 for inception_v3
+_C.INPUT.ATTN_SIZE = [28]  # 299 for inception_v3
 _C.INPUT.CROP_PCT = 0.875  # 0.816 for inception_v3
 _C.INPUT.INTERPOLATION = 2
 
@@ -176,6 +176,7 @@ _C.BACKUP_LOG_DIR = ""
 _C.LOG_FREQ = 10
 # evaluate model on validation set
 _C.EVALUATE = False
+_C.RESNET = False
 _C.OUTPUT_PERCLASS_ACC = False
 # Only save the last checkpoint in the checkpointer
 _C.ONLY_SAVE_LAST = 0
