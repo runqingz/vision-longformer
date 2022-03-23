@@ -160,7 +160,6 @@ class BasicAABlock(nn.Module):
 
         out += identity
         out = self.relu(out)
-
         #Attention path
         atten_out = self.qkv_conv(x)
         B = atten_out.shape[0]

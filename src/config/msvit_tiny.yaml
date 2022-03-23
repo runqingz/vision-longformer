@@ -28,7 +28,7 @@ AUG:
 BACKUP_LOG_DIR: 
 DATA:
   DATA_DIR: ./data
-  NUM_CLASSES: 1000
+  NUM_CLASSES: 10
   PATH: /home/rzhang/Dev/vision-longformer/datasets/cifar10
   #PATH: /home/rzhang/Dev/vision-longformer/datasets/imagenet/2012
   TARGETMAP: 
@@ -40,6 +40,7 @@ DATALOADER:
   WORKERS: 2
 DISTRIBUTED_BACKEND: nccl
 EVALUATE: False
+RESNET: True
 FINETUNE:
   FINETUNE: False
   USE_TRAIN_AUG: False
@@ -47,7 +48,7 @@ GATHER_ON_CPU: False
 INPUT:
   CROP_PCT: 0.875
   IMAGE_SIZE: 32
-  ATTN_SIZE: 8
+  ATTN_SIZE: [8, 4]
   INTERPOLATION: 3
   MEAN: [0.485, 0.456, 0.406]
   STD: [0.229, 0.224, 0.225]
@@ -69,7 +70,7 @@ MODEL:
     DROP: 0.0
     DROP_PATH: 0.1
     MSVIT:
-      ARCH: l1,h1,d192,n1,s1,g1,p1,f7
+      ARCH: l1,h1,d48,n1,s1,g1,p1,f7
       ATTN_TYPE: longformerhand
       LN_EPS: 1e-06
       ONLY_GLOBAL: False

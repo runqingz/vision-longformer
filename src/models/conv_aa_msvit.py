@@ -364,7 +364,7 @@ class MsViTAA(nn.Module):
     """ Multiscale Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self, arch, img_size=512, attn_size=64, in_chans=3,
+    def __init__(self, arch, img_size=512, attn_size=[64], in_chans=3,
                  num_classes=1000,
                  qkv_bias=True, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
@@ -417,9 +417,7 @@ class MsViTAA(nn.Module):
             'drop': drop_rate,
         })
 
-        #Attention input image dimension, this must match resnet output dimention
-        self.Nx = attn_size
-        self.Ny = attn_size
+        
         def parse_arch(arch):
             layer_cfgs = []
             for layer in arch.split('_'):
@@ -437,10 +435,10 @@ class MsViTAA(nn.Module):
         self.Nglos = [cfg['g'] for cfg in self.layer_cfgs]
         self.avg_pool = args['avg_pool'] if 'avg_pool' in args else False
 
-        dprs = torch.linspace(0, drop_path_rate, self.depth).split(
+        self.dprs = torch.linspace(0, drop_path_rate, self.depth).split(
             [cfg['n'] for cfg in self.layer_cfgs]
         )  # stochastic depth decay rule
-
+        self.attn_size = attn_size
 
         #Resnet Layers
         self._norm_layer = nn.BatchNorm2d
@@ -456,13 +454,13 @@ class MsViTAA(nn.Module):
 
         block = BasicBlock
         layers = [2, 2, 2, 2]
-
-        self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
-                                       dprs=dprs[0], layerid=1)
-        self.norm = norm_layer(self.layer_cfgs[0]['d'])
-
-        self.res_layer1 = self._make_res_layer(BasicAABlock, 64, layers[0], attn_planes=self.layer_cfgs[0]['d'], attention=self.aa_layer1, attn_norm_layer=self.norm, Nglos=self.layer_cfgs[0]['g'])
+        self.res_layer1 = self._make_res_layer(BasicAABlock, 64, layers[0], attn_layer=0)
+        #Attention input image dimension, this must match resnet output dimention
+        
         self.res_layer2 = self._make_res_layer(block, 128, layers[1], stride=2, dilate=False)
+
+        #self.res_layer2 = self._make_res_layer(BasicAABlock, 128, layers[1], stride=2, dilate=False, attn_layer=1)
+        
         self.res_layer3 = self._make_res_layer(block, 256, layers[2], stride=2, dilate=False)
         self.res_layer4 = self._make_res_layer(block, 512, layers[3], stride=2, dilate=False)
 
@@ -495,10 +493,7 @@ class MsViTAA(nn.Module):
         block: Type[Union[BasicBlock, Bottleneck, BasicAABlock]],
         planes: int,
         blocks: int,
-        attn_planes: int = 64,
-        attention: nn.Module = None,
-        attn_norm_layer: nn.Module = None,
-        Nglos: int = 0,
+        attn_layer: int = 0,
         stride: int = 1,
         dilate: bool = False,
     ) -> nn.Sequential:
@@ -515,7 +510,6 @@ class MsViTAA(nn.Module):
             )
 
         layers = []
-        
         if block is BasicAABlock:
             '''
             inplanes: int,
@@ -531,14 +525,20 @@ class MsViTAA(nn.Module):
             dilation: int = 1,
             norm_layer: Optional[Callable[..., nn.Module]] = None,
             '''
+            self.Nx = self.attn_size[attn_layer]
+            self.Ny = self.attn_size[attn_layer]
+            aa_layer = self._make_layer(self.inplanes, self.layer_cfgs[attn_layer],
+                                       dprs=self.dprs[attn_layer], layerid=attn_layer+1)
+            norm = self.norm_layer(self.layer_cfgs[attn_layer]['d'])
+
             layers.append(
                 block(
-                    self.inplanes,
+                        self.inplanes,
                         planes,
-                        attn_planes,
-                        attention,
-                        attn_norm_layer,
-                        Nglos,
+                        self.layer_cfgs[attn_layer]['d'],
+                        aa_layer,
+                        norm,
+                        self.layer_cfgs[attn_layer]['g'],
                         stride,
                         downsample,
                         self.groups,
@@ -547,16 +547,24 @@ class MsViTAA(nn.Module):
                         norm_layer
                 )
             )
+
             self.inplanes = planes * block.expansion
+
+            self.Nx = self.attn_size[attn_layer]
+            self.Ny = self.attn_size[attn_layer]
+            aa_layer = self._make_layer(self.inplanes, self.layer_cfgs[attn_layer],
+                                       dprs=self.dprs[attn_layer], layerid=attn_layer+1)
+            norm = self.norm_layer(self.layer_cfgs[attn_layer]['d'])
+
             for _ in range(1, blocks):
                 layers.append(
                     block(
                         self.inplanes,
                         planes,
-                        attn_planes,
-                        attention,
-                        attn_norm_layer,
-                        Nglos,
+                        self.layer_cfgs[attn_layer]['d'],
+                        aa_layer,
+                        norm,
+                        self.layer_cfgs[attn_layer]['g'],
                         groups=self.groups,
                         base_width=self.base_width,
                         dilation=self.dilation,
