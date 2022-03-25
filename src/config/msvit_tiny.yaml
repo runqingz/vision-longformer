@@ -35,12 +35,12 @@ DATA:
   TEST: ('cifar',)
   TRAIN: ('cifar',)
 DATALOADER:
-  BSZ: 8
+  BSZ: 2
   RE: 'no'
   WORKERS: 2
 DISTRIBUTED_BACKEND: nccl
 EVALUATE: False
-RESNET: True
+RESNET: False
 FINETUNE:
   FINETUNE: False
   USE_TRAIN_AUG: False
