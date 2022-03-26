@@ -5,6 +5,7 @@ import torch.nn as nn
 import torchvision.models as tvmodels
 from .msvit import MsViT
 from .conv_aa_msvit import MsViTAA
+from .resnet_reference import resnet18
 
 
 def build_model(cfg):
@@ -16,7 +17,8 @@ def build_model(cfg):
 
     # Vision Transformer models
     vitmodeldict = {
-        'msvit': MsViTAA,
+        'msvit': MsViT,
+        'msvit_resnet18': resnet18
     }
     vit_model_names = list(vitmodeldict.keys())
     print("Vision Transformer models: \n", vit_model_names)

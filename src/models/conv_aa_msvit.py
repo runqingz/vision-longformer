@@ -12,26 +12,7 @@ from .layers import (
     SRSelfAttention
 )
 # from .longformer2d_cuda import Longformer2DSelfAttention
-from .resnet_reference import BasicBlock, Bottleneck
-from typing import Type, Any, Callable, Union, List, Optional
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes,
-        out_planes,
-        kernel_size=3,
-        stride=stride,
-        padding=dilation,
-        groups=groups,
-        bias=False,
-        dilation=dilation,
-    )
-
-
-def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
-    """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None,
@@ -369,7 +350,6 @@ class MsViTAA(nn.Module):
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
                  norm_embed=False, w=7, d=1, sharew=False, only_glo=False,
                  share_kv=False,
-                 zero_init_residual=False,
                  attn_type='longformerhand', sw_exact=0, mode=0, **args):
         super().__init__()
         self.num_classes = num_classes
@@ -419,6 +399,7 @@ class MsViTAA(nn.Module):
         #Attention input image dimension, this must match resnet output dimention
         self.Nx = attn_size
         self.Ny = attn_size
+
         def parse_arch(arch):
             layer_cfgs = []
             for layer in arch.split('_'):
@@ -440,102 +421,24 @@ class MsViTAA(nn.Module):
             [cfg['n'] for cfg in self.layer_cfgs]
         )  # stochastic depth decay rule
 
-
-        #Resnet Layers
-        self._norm_layer = nn.BatchNorm2d
-
-        self.inplanes = 64
-        self.dilation = 1
-        self.groups = 1
-        self.base_width = 64
-        self.conv1 = nn.Conv2d(in_chans, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(self.inplanes)
-        self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        block = BasicBlock
-        layers = [2, 2, 2, 2]
-
-        self.res_layer1 = self._make_res_layer(block, 64, layers[0])
-        self.res_layer2 = self._make_res_layer(block, 128, layers[1], stride=2, dilate=False)
-        self.res_layer3 = self._make_res_layer(block, 256, layers[2], stride=2, dilate=False)
-        self.res_layer4 = self._make_res_layer(block, 512, layers[3], stride=2, dilate=False)
-
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-        self._init_resnet_weights(zero_init_residual)
-
         #Conv layer to make sure dimension of attention output match resnet conv output
-        self.qkv_conv = conv3x3(64, 64, 2)
+        self.qkv_conv = nn.Conv2d(
+            64,
+            64,
+            kernel_size=3,
+            stride= 2,
+            padding=1,
+            groups=1,
+            bias=False,
+            dilation=1,
+        )
         # Atten layers to replace CONV
         self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
                                        dprs=dprs[0], layerid=1)
         #Layer Norm
         self.norm = norm_layer(self.out_planes)
-        #Projection layer of concat output
-        self.projection = conv1x1(256, 128)
 
         self.apply(self._init_weights)
-
-    def _init_resnet_weights(self, zero_init_residual):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-
-        # Zero-initialize the last BN in each residual branch,
-        # so that the residual branch starts with zeros, and each residual block behaves like an identity.
-        # This improves the model by 0.2~0.3% according to https://arxiv.org/abs/1706.02677
-        if zero_init_residual:
-            for m in self.modules():
-                if isinstance(m, Bottleneck):
-                    nn.init.constant_(m.bn3.weight, 0)  # type: ignore[arg-type]
-                elif isinstance(m, BasicBlock):
-                    nn.init.constant_(m.bn2.weight, 0)  # type: ignore[arg-type]
-    
-    def _make_res_layer(
-        self,
-        block: Type[Union[BasicBlock, Bottleneck]],
-        planes: int,
-        blocks: int,
-        stride: int = 1,
-        dilate: bool = False,
-    ) -> nn.Sequential:
-        norm_layer = self._norm_layer
-        downsample = None
-        previous_dilation = self.dilation
-        if dilate:
-            self.dilation *= stride
-            stride = 1
-        if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion, stride),
-                norm_layer(planes * block.expansion),
-            )
-
-        layers = []
-        layers.append(
-            block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
-            )
-        )
-        self.inplanes = planes * block.expansion
-        for _ in range(1, blocks):
-            layers.append(
-                block(
-                    self.inplanes,
-                    planes,
-                    groups=self.groups,
-                    base_width=self.base_width,
-                    dilation=self.dilation,
-                    norm_layer=norm_layer,
-                )
-            )
-
-        return nn.Sequential(*layers)
 
     def _make_layer(self, in_dim, layer_cfg, dprs, layerid=0):
         layer_id, num_heads, dim, num_block, is_sparse_attn, nglo, patch_size, num_feats, ape \
@@ -589,6 +492,7 @@ class MsViTAA(nn.Module):
         return self.head
 
     def _forward_attn(self, x):
+        x = self.qkv_conv(x)
         B = x.shape[0]
         x, nx, ny = self.aa_layer1((x, None, None))
         x = self.norm(x)
@@ -596,32 +500,6 @@ class MsViTAA(nn.Module):
         x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
 
         return x
-
-    def _forward_aa_resnet(self, x):
-        # See note [TorchScript super()]
-
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-
-        x = self.res_layer1(x)
-        # Augment attention output and resnet layer output
-        atten_out = self._forward_attn(self.qkv_conv(x))
-        conv_out = self.res_layer2(x)
-        x = torch.cat((conv_out, atten_out), dim=1)
-        x = self.projection(x)
-
-        # continue resnet output
-        x = self.res_layer3(x)
-        x = self.res_layer4(x)
-
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
-
-        return x
-
 
     def check_redraw_projections(self):
         if not self.training:
@@ -651,5 +529,5 @@ class MsViTAA(nn.Module):
 
     def forward(self, x):
         #AA forward
-        x = self._forward_aa_resnet(x)
+        x = self._forward_attn(x)
         return x

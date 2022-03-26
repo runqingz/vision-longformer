@@ -35,9 +35,9 @@ DATA:
   TEST: ('cifar',)
   TRAIN: ('cifar',)
 DATALOADER:
-  BSZ: 8
+  BSZ: 2
   RE: 'no'
-  WORKERS: 2
+  WORKERS: 0
 DISTRIBUTED_BACKEND: nccl
 EVALUATE: False
 FINETUNE:
@@ -60,7 +60,7 @@ LOSS:
   LABEL_SMOOTHING: 0.1
   LOSS: xentropy
 MODEL:
-  ARCH: msvit
+  ARCH: msvit_resnet18
   FREEZE_CONV_BODY_AT: -1
   NONLINEARITY: celu
   PRETRAINED: False
