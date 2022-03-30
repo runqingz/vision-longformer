@@ -194,16 +194,23 @@ class ResNet(nn.Module):
         self.bn1 = norm_layer(self.inplanes)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
         self.layer1 = self._make_layer(block, 64, layers[0])
+
+        self.msvit2 = MsViTAA(self.inplanes, 128, 4, **kwargs)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
+        self.prjct2 = nn.Conv2d(256, 128, kernel_size=1, stride=1, bias=False)
+
+        self.msvit3 = MsViTAA(self.inplanes, 256, 2, **kwargs)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
+        self.prjct3 = nn.Conv2d(512, 256, kernel_size=1, stride=1, bias=False)
+
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         # attention
-        self.msvit = MsViTAA(num_classes=num_classes, **kwargs)
-        self.projection = nn.Conv2d(256, 128, kernel_size=1, stride=1, bias=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -271,14 +278,19 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)
-        # Augment attention output and resnet layer output
-        atten_out = self.msvit(x)
+        # layer2
+        attn_out = self.msvit2(x)
         conv_out = self.layer2(x)
-        x = torch.cat((conv_out, atten_out), dim=1)
-        x = self.projection(x)
+        x = torch.cat((conv_out, attn_out), dim=1)
+        x = self.prjct2(x)
+
+        # layer3
+        attn_out = self.msvit3(x)
+        conv_out = self.layer3(x)
+        x = torch.cat((conv_out, attn_out), dim=1)
+        x = self.prjct3(x)
 
         # continue resnet output
-        x = self.layer3(x)
         x = self.layer4(x)
 
         x = self.avgpool(x)

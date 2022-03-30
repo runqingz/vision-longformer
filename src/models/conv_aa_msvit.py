@@ -344,7 +344,11 @@ class MsViTAA(nn.Module):
     """ Multiscale Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self, arch, img_size=512, attn_size=64, in_chans=3,
+    def __init__(self,
+                 in_planes,
+                 out_planes,
+                 image_size=512,
+                 arch=None,
                  num_classes=1000,
                  qkv_bias=True, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                  drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6),
@@ -397,8 +401,8 @@ class MsViTAA(nn.Module):
         })
 
         #Attention input image dimension, this must match resnet output dimention
-        self.Nx = attn_size
-        self.Ny = attn_size
+        self.Nx = image_size
+        self.Ny = image_size
 
         def parse_arch(arch):
             layer_cfgs = []
@@ -411,6 +415,7 @@ class MsViTAA(nn.Module):
             return layer_cfgs
 
         self.layer_cfgs = parse_arch(arch)
+        self.layer_cfgs[0]['d'] = out_planes
         self.num_layers = len(self.layer_cfgs)
         self.depth = sum([cfg['n'] for cfg in self.layer_cfgs])
         self.out_planes = self.layer_cfgs[-1]['d']
@@ -423,8 +428,8 @@ class MsViTAA(nn.Module):
 
         #Conv layer to make sure dimension of attention output match resnet conv output
         self.qkv_conv = nn.Conv2d(
-            64,
-            64,
+            in_planes,
+            in_planes,
             kernel_size=3,
             stride= 2,
             padding=1,
@@ -433,7 +438,7 @@ class MsViTAA(nn.Module):
             dilation=1,
         )
         # Atten layers to replace CONV
-        self.aa_layer1 = self._make_layer(64, self.layer_cfgs[0],
+        self.aa_layer1 = self._make_layer(in_planes, self.layer_cfgs[0],
                                        dprs=dprs[0], layerid=1)
         #Layer Norm
         self.norm = norm_layer(self.out_planes)
