@@ -15,7 +15,6 @@ _C.INPUT = CN()
 _C.INPUT.MEAN = [0.485, 0.456, 0.406]
 _C.INPUT.STD = [0.229, 0.224, 0.225]
 _C.INPUT.IMAGE_SIZE = 224  # 299 for inception_v3
-_C.INPUT.ATTN_SIZE = 28  # 299 for inception_v3
 _C.INPUT.CROP_PCT = 0.875  # 0.816 for inception_v3
 _C.INPUT.INTERPOLATION = 2
 
@@ -138,6 +137,7 @@ _C.MODEL.VIT.NORM_EMBED = True
 # Use average pooled feature instead of CLS token for classification head
 _C.MODEL.VIT.AVG_POOL = False
 _C.MODEL.VIT.MSVIT = CN()
+_C.MODEL.VIT.RESNET = CN()
 # multi-scale model arch: see ReadMe.md for explanation
 _C.MODEL.VIT.MSVIT.ARCH = 'l1,h3,d192,n1,s1,g1,p16,f7,a1_l2,h6,d384,n10,s0,g1,p2,f7,a1_l3,h12,d796,n1,s0,g1,p2,f7,a1'
 # For vision longformer: whether to share the q/k/v projections of global and local tokens
@@ -160,6 +160,10 @@ _C.MODEL.VIT.MSVIT.LN_EPS = 1e-6
 _C.MODEL.VIT.MSVIT.MODE = 0
 # Switching time from mode 1 to mode 0 during training
 _C.MODEL.VIT.MSVIT.VIL_MODE_SWITCH = 0.75
+# Enable Attention in ResNet
+_C.MODEL.VIT.RESNET.ATTN = True
+# Enable Convolution in ResNet
+_C.MODEL.VIT.RESNET.CONV = True
 
 # finetune setting
 _C.FINETUNE = CN()

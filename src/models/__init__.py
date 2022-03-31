@@ -39,7 +39,6 @@ def build_model(cfg):
         logging.info("Use vision transformer model")
         args = dict(
             img_size=cfg.INPUT.IMAGE_SIZE,
-            attn_size=cfg.INPUT.ATTN_SIZE,
             drop_rate=cfg.MODEL.VIT.DROP,
             drop_path_rate=cfg.MODEL.VIT.DROP_PATH,
             norm_embed=cfg.MODEL.VIT.NORM_EMBED,
@@ -54,6 +53,9 @@ def build_model(cfg):
             args['sw_exact'] = cfg.MODEL.VIT.MSVIT.SW_EXACT
             args['ln_eps'] = cfg.MODEL.VIT.MSVIT.LN_EPS
             args['mode'] = cfg.MODEL.VIT.MSVIT.MODE
+        if 'resnet' in cfg.MODEL.ARCH:
+            args['attn'] = cfg.MODEL.VIT.RESNET.ATTN
+            args['conv'] = cfg.MODEL.VIT.RESNET.CONV
         logging.info("=> creating model '{}'".format(cfg.MODEL.ARCH))
         net = vitmodeldict[cfg.MODEL.ARCH](num_classes=cfg.DATA.NUM_CLASSES, **args)
     else:

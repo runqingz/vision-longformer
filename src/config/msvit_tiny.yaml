@@ -35,7 +35,7 @@ DATA:
   TEST: ('cifar',)
   TRAIN: ('cifar',)
 DATALOADER:
-  BSZ: 2
+  BSZ: 32
   RE: 'no'
   WORKERS: 0
 DISTRIBUTED_BACKEND: nccl
@@ -76,6 +76,9 @@ MODEL:
       SHARE_W: True
       SW_EXACT: 0
     NORM_EMBED: True
+    RESNET:
+      ATTN: True
+      CONV: True
 ONLY_SAVE_LAST: 0
 OPTIM:
   ADAM:
