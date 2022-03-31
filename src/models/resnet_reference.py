@@ -195,17 +195,21 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
+        self.msvit1 = MsViTAA(self.inplanes, 64, stride=1, image_size=8, **kwargs)
         self.layer1 = self._make_layer(block, 64, layers[0])
+        self.prjct1 = nn.Conv2d(128, 64, kernel_size=1, stride=1, bias=False)
 
-        self.msvit2 = MsViTAA(self.inplanes, 128, 4, **kwargs)
+        self.msvit2 = MsViTAA(self.inplanes, 128, stride=2, image_size=8, **kwargs)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
         self.prjct2 = nn.Conv2d(256, 128, kernel_size=1, stride=1, bias=False)
 
-        self.msvit3 = MsViTAA(self.inplanes, 256, 2, **kwargs)
+        self.msvit3 = MsViTAA(self.inplanes, 256, stride=2, image_size=4, **kwargs)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
         self.prjct3 = nn.Conv2d(512, 256, kernel_size=1, stride=1, bias=False)
 
+        self.msvit4 = MsViTAA(self.inplanes, 512, stride=2, image_size=2, **kwargs)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+        self.prjct4 = nn.Conv2d(1024, 512, kernel_size=1, stride=1, bias=False)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -277,7 +281,12 @@ class ResNet(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
 
-        x = self.layer1(x)
+        # layer1
+        attn_out = self.msvit1(x)
+        conv_out = self.layer1(x)
+        x = torch.cat((conv_out, attn_out), dim=1)
+        x = self.prjct1(x)
+
         # layer2
         attn_out = self.msvit2(x)
         conv_out = self.layer2(x)
@@ -290,8 +299,11 @@ class ResNet(nn.Module):
         x = torch.cat((conv_out, attn_out), dim=1)
         x = self.prjct3(x)
 
-        # continue resnet output
-        x = self.layer4(x)
+        # layer4
+        attn_out = self.msvit4(x)
+        conv_out = self.layer4(x)
+        x = torch.cat((conv_out, attn_out), dim=1)
+        x = self.prjct4(x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)

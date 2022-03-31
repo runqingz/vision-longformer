@@ -347,6 +347,7 @@ class MsViTAA(nn.Module):
     def __init__(self,
                  in_planes,
                  out_planes,
+                 stride=1,
                  image_size=512,
                  arch=None,
                  num_classes=1000,
@@ -426,19 +427,19 @@ class MsViTAA(nn.Module):
             [cfg['n'] for cfg in self.layer_cfgs]
         )  # stochastic depth decay rule
 
-        #Conv layer to make sure dimension of attention output match resnet conv output
-        self.qkv_conv = nn.Conv2d(
-            in_planes,
-            in_planes,
+        # Projection layer to change the image size
+        self.project = nn.Conv2d(
+            out_planes,
+            out_planes,
             kernel_size=3,
-            stride= 2,
+            stride=stride,
             padding=1,
             groups=1,
             bias=False,
             dilation=1,
         )
-        # Atten layers to replace CONV
-        self.aa_layer1 = self._make_layer(in_planes, self.layer_cfgs[0],
+        # Attention layers
+        self.attention = self._make_layer(in_planes, self.layer_cfgs[0],
                                        dprs=dprs[0], layerid=1)
         #Layer Norm
         self.norm = norm_layer(self.out_planes)
@@ -497,12 +498,11 @@ class MsViTAA(nn.Module):
         return self.head
 
     def _forward_attn(self, x):
-        x = self.qkv_conv(x)
-        B = x.shape[0]
-        x, nx, ny = self.aa_layer1((x, None, None))
+        batch_size = x.shape[0]
+        x, nx, ny = self.attention((x, None, None))
         x = self.norm(x)
-
-        x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(B, -1, nx, ny)
+        x = x[:, self.Nglos[0]:].transpose(-2, -1).reshape(batch_size, -1, nx, ny)
+        x = self.project(x)
 
         return x
 
