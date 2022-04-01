@@ -202,20 +202,20 @@ class ResNet(nn.Module):
 
         planes = 64
         self.msvit1 = MsViTAA(self.inplanes, planes, stride=1, image_size=8, **kwargs)
-        self.layer1 = self._make_layer(block, planes, layers[0])
+        self.layer1 = self._make_layer(block, planes, layers[0], image_size=8, **kwargs)
         self.prjct1 = nn.Conv2d(planes * 2, planes, kernel_size=1, stride=1, bias=False)
         self.aacnv1 = AugmentedConv(self.inplanes, planes, 3, dk=2 * planes, dv=int(0.2 * planes), Nh=4, relative=True)
 
         self.msvit2 = MsViTAA(self.inplanes, 128, stride=2, image_size=8, **kwargs)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], image_size=8, **kwargs)
         self.prjct2 = nn.Conv2d(256, 128, kernel_size=1, stride=1, bias=False)
 
         self.msvit3 = MsViTAA(self.inplanes, 256, stride=2, image_size=4, **kwargs)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], image_size=4, **kwargs)
         self.prjct3 = nn.Conv2d(512, 256, kernel_size=1, stride=1, bias=False)
 
         self.msvit4 = MsViTAA(self.inplanes, 512, stride=2, image_size=2, **kwargs)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], image_size=2, **kwargs)
         self.prjct4 = nn.Conv2d(1024, 512, kernel_size=1, stride=1, bias=False)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
@@ -247,6 +247,8 @@ class ResNet(nn.Module):
         blocks: int,
         stride: int = 1,
         dilate: bool = False,
+        image_size=32,
+        **kwargs,
     ) -> nn.Sequential:
         norm_layer = self._norm_layer
         downsample = None
