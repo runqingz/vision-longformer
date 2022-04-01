@@ -66,6 +66,8 @@ class BasicBlock(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
+        image_size=32,
+        **kwargs,
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -265,10 +267,20 @@ class ResNet(nn.Module):
         layers = []
         layers.append(
             block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer
+                self.inplanes,
+                planes,
+                stride,
+                downsample,
+                self.groups,
+                self.base_width,
+                previous_dilation,
+                norm_layer,
+                image_size=image_size,
+                **kwargs
             )
         )
         self.inplanes = planes * block.expansion
+        image_size = int(image_size / stride)
         for _ in range(1, blocks):
             layers.append(
                 block(
@@ -278,6 +290,8 @@ class ResNet(nn.Module):
                     base_width=self.base_width,
                     dilation=self.dilation,
                     norm_layer=norm_layer,
+                    image_size=image_size,
+                    **kwargs
                 )
             )
 
