@@ -8,6 +8,11 @@ import sys
 import torch
 import torch.utils.data.distributed
 from timm.data import Mixup
+from torchinfo import summary
+
+from torchinfo import summary
+import time
+from ptflops import get_model_complexity_info
 
 # torch.backends.cudnn.benchmark = True
 # torch.backends.cudnn.deterministic = True
@@ -286,3 +291,25 @@ if not cfg.EVALUATE:
 train_meters.close()
 for meter in test_meters:
     meter.close()
+
+summary(net, input_size=(1, 3, cfg.INPUT.IMAGE_SIZE, cfg.INPUT.IMAGE_SIZE))
+input_ = torch.randn(1, 3, 32, 32).to(device)
+macs, params = get_model_complexity_info(net, (3, 32, 32), as_strings=True,
+                                         print_per_layer_stat=True, verbose=True)
+
+avg = 0.0
+best = 100000000000000.0
+for _ in range(0, 100):
+    start = time.time()
+    net(input_)
+    end = time.time()
+    elapsed_time = (end - start) * 1e+3
+    best = min(best, elapsed_time)
+    avg = avg + elapsed_time
+avg = avg / 100
+
+print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+print('{:<30}  {:<8} ms'.format('Best process time: ', best))
+print('{:<30}  {:<8} ms'.format('Average process time: ', avg))
