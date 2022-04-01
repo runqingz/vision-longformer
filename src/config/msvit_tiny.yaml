@@ -77,8 +77,9 @@ MODEL:
       SW_EXACT: 0
     NORM_EMBED: True
     RESNET:
-      ATTN: True
+      MSVIT: True
       CONV: True
+      AACONV: False
 ONLY_SAVE_LAST: 0
 OPTIM:
   ADAM:

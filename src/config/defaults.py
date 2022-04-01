@@ -160,10 +160,12 @@ _C.MODEL.VIT.MSVIT.LN_EPS = 1e-6
 _C.MODEL.VIT.MSVIT.MODE = 0
 # Switching time from mode 1 to mode 0 during training
 _C.MODEL.VIT.MSVIT.VIL_MODE_SWITCH = 0.75
-# Enable Attention in ResNet
-_C.MODEL.VIT.RESNET.ATTN = True
+# Enable MSVIT Attention in ResNet
+_C.MODEL.VIT.RESNET.MSVIT = True
 # Enable Convolution in ResNet
 _C.MODEL.VIT.RESNET.CONV = True
+# Enable Attention Augmented Convolution in ResNet
+_C.MODEL.VIT.RESNET.AACONV = False
 
 # finetune setting
 _C.FINETUNE = CN()

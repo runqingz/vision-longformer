@@ -54,8 +54,9 @@ def build_model(cfg):
             args['ln_eps'] = cfg.MODEL.VIT.MSVIT.LN_EPS
             args['mode'] = cfg.MODEL.VIT.MSVIT.MODE
         if 'resnet' in cfg.MODEL.ARCH:
-            args['attn'] = cfg.MODEL.VIT.RESNET.ATTN
+            args['msvit'] = cfg.MODEL.VIT.RESNET.MSVIT
             args['conv'] = cfg.MODEL.VIT.RESNET.CONV
+            args['aaconv'] = cfg.MODEL.VIT.RESNET.AACONV
         logging.info("=> creating model '{}'".format(cfg.MODEL.ARCH))
         net = vitmodeldict[cfg.MODEL.ARCH](num_classes=cfg.DATA.NUM_CLASSES, **args)
     else:

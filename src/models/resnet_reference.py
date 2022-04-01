@@ -182,10 +182,13 @@ class ResNet(nn.Module):
 
         self.inplanes = 64
         self.dilation = 1
-        self.enable_attn = kwargs['attn']
+        self.enable_msvit = kwargs['msvit']
         self.enable_conv = kwargs['conv']
+        self.enable_aaconv = kwargs['aaconv']
         # At least one of attention and convolution should be enabled
-        assert self.enable_attn or self.enable_conv
+        assert self.enable_msvit or self.enable_conv
+        # Attention augmented convolution can not be paired with msvit of normal convolution
+        assert self.enable_aaconv and not self.enable_conv and not self.enable_msvit
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
@@ -305,45 +308,45 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         # layer1
-        if self.enable_attn and self.enable_conv:
+        if self.enable_msvit and self.enable_conv:
             attn_out = self.msvit1(x)
             conv_out = self.layer1(x)
             x = torch.cat((conv_out, attn_out), dim=1)
             x = self.prjct1(x)
-        elif self.enable_attn:
+        elif self.enable_msvit:
             x = self.msvit1(x)
         elif self.enable_conv:
             x = self.layer1(x)
 
         # layer2
-        if self.enable_attn and self.enable_conv:
+        if self.enable_msvit and self.enable_conv:
             attn_out = self.msvit2(x)
             conv_out = self.layer2(x)
             x = torch.cat((conv_out, attn_out), dim=1)
             x = self.prjct2(x)
-        elif self.enable_attn:
+        elif self.enable_msvit:
             x = self.msvit2(x)
         elif self.enable_conv:
             x = self.layer2(x)
 
         # layer3
-        if self.enable_attn and self.enable_conv:
+        if self.enable_msvit and self.enable_conv:
             attn_out = self.msvit3(x)
             conv_out = self.layer3(x)
             x = torch.cat((conv_out, attn_out), dim=1)
             x = self.prjct3(x)
-        elif self.enable_attn:
+        elif self.enable_msvit:
             x = self.msvit3(x)
         elif self.enable_conv:
             x = self.layer3(x)
 
         # layer4
-        if self.enable_attn and self.enable_conv:
+        if self.enable_msvit and self.enable_conv:
             attn_out = self.msvit4(x)
             conv_out = self.layer4(x)
             x = torch.cat((conv_out, attn_out), dim=1)
             x = self.prjct4(x)
-        elif self.enable_attn:
+        elif self.enable_msvit:
             x = self.msvit4(x)
         elif self.enable_conv:
             x = self.layer4(x)
