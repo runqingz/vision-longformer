@@ -4,7 +4,7 @@ import logging
 import torch.nn as nn
 import torchvision.models as tvmodels
 from .msvit import MsViT
-from .conv_aa_msvit import MsViTAA
+from .conv_aa_msvit import MsViT
 from .resnet_reference import resnet18
 
 
@@ -54,9 +54,7 @@ def build_model(cfg):
             args['ln_eps'] = cfg.MODEL.VIT.MSVIT.LN_EPS
             args['mode'] = cfg.MODEL.VIT.MSVIT.MODE
         if 'resnet' in cfg.MODEL.ARCH:
-            args['msvit'] = cfg.MODEL.VIT.RESNET.MSVIT
-            args['conv'] = cfg.MODEL.VIT.RESNET.CONV
-            args['aaconv'] = cfg.MODEL.VIT.RESNET.AACONV
+            args['conv_type'] = cfg.MODEL.VIT.RESNET.CONV_TYPE
         logging.info("=> creating model '{}'".format(cfg.MODEL.ARCH))
         net = vitmodeldict[cfg.MODEL.ARCH](num_classes=cfg.DATA.NUM_CLASSES, **args)
     else:

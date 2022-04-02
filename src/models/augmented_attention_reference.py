@@ -8,11 +8,12 @@ device = torch.device("cuda" if use_cuda else "cpu")
 
 
 class AugmentedConv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, dk, dv, Nh, relative):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, dk, dv, Nh, relative):
         super(AugmentedConv, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
+        self.stride = stride
         self.dk = dk
         self.dv = dv
         self.Nh = Nh
@@ -23,6 +24,9 @@ class AugmentedConv(nn.Module):
         self.qkv_conv = nn.Conv2d(self.in_channels, 2 * self.dk + self.dv, kernel_size=1)
 
         self.attn_out = nn.Conv2d(self.dv, self.dv, 1)
+
+        self.project = nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=stride,
+                                 padding=1, groups=1, bias=False, dilation=1)
 
     def forward(self, x):
         # Input x
@@ -55,7 +59,9 @@ class AugmentedConv(nn.Module):
         # (batch, out_channels, height, width)
         attn_out = self.combine_heads_2d(attn_out)
         attn_out = self.attn_out(attn_out)
-        return torch.cat((conv_out, attn_out), dim=1)
+        out = torch.cat((conv_out, attn_out), dim=1)
+        out = self.project(out)
+        return out
 
     def compute_flat_qkv(self, x, dk, dv, Nh):
         N, _, H, W = x.size()

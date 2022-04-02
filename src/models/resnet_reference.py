@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from .conv_aa_msvit import MsViTAA
+from .conv_aa_msvit import MsViT
 from .augmented_attention_reference import AugmentedConv
 
 __all__ = [
@@ -34,18 +34,51 @@ model_urls = {
 }
 
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, image_size=32, **kwargs: Any) -> nn.Conv2d:
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes,
-        out_planes,
-        kernel_size=3,
-        stride=stride,
-        padding=dilation,
-        groups=groups,
-        bias=False,
-        dilation=dilation,
-    )
+def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, image_size=32, **kwargs: Any):
+    conv_type = kwargs['conv_type']
+
+    if conv_type == 'msvit':
+        return MsViT(
+            in_planes,
+            out_planes,
+            stride=stride,
+            image_size=image_size,
+            **kwargs
+        )
+    elif conv_type == 'msvitconv':
+        return MsViTConv(
+            in_planes,
+            out_planes,
+            kernel_size=3,
+            stride=stride,
+            dv=int(out_planes / 4.0),
+            image_size=image_size,
+            **kwargs
+        )
+    elif conv_type == 'aaconv':
+        return AugmentedConv(
+            in_planes,
+            out_planes,
+            kernel_size=3,
+            stride=stride,
+            dk=2 * out_planes,
+            dv=int(out_planes / 4.0),
+            Nh=4,
+            relative=True
+        )
+    else:
+        """3x3 convolution with padding"""
+        return nn.Conv2d(
+            in_planes,
+            out_planes,
+            kernel_size=3,
+            stride=stride,
+            padding=dilation,
+            groups=groups,
+            bias=False,
+            dilation=dilation,
+        )
+
 
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
@@ -162,6 +195,27 @@ class Bottleneck(nn.Module):
         return out
 
 
+class MsViTConv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, stride, dv, image_size=32, **kwargs):
+        super().__init__()
+        self.conv_out = nn.Conv2d(in_channels, out_channels - dv, kernel_size, stride, padding=1)
+        self.msvit = MsViT(in_channels, dv, stride, image_size, **kwargs)
+
+    def forward(self, x):
+        # Input x
+        # (batch_size, channels, height, width)
+        batch, _, height, width = x.size()
+
+        # conv_out
+        # (batch_size, out_channels - dv, height, width)
+        conv_out = self.conv_out(x)
+
+        # attn_out
+        # (batch_size, dv, height, width)
+        attn_out = self.msvit(x)
+        return torch.cat((conv_out, attn_out), dim=1)
+
+
 class ResNet(nn.Module):
     def __init__(
         self,
@@ -182,13 +236,6 @@ class ResNet(nn.Module):
 
         self.inplanes = 64
         self.dilation = 1
-        self.enable_msvit = kwargs['msvit']
-        self.enable_conv = kwargs['conv']
-        self.enable_aaconv = kwargs['aaconv']
-        # At least one of attention and convolution should be enabled
-        assert self.enable_msvit or self.enable_conv
-        # Attention augmented convolution can not be paired with msvit of normal convolution
-        assert self.enable_aaconv and not self.enable_conv and not self.enable_msvit
         if replace_stride_with_dilation is None:
             # each element in the tuple indicates if we should replace
             # the 2x2 stride with a dilated convolution instead
@@ -205,23 +252,10 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        planes = 64
-        self.msvit1 = MsViTAA(self.inplanes, planes, stride=1, image_size=8, **kwargs)
-        self.layer1 = self._make_layer(block, planes, layers[0], image_size=8, **kwargs)
-        self.prjct1 = nn.Conv2d(planes * 2, planes, kernel_size=1, stride=1, bias=False)
-        self.aacnv1 = AugmentedConv(self.inplanes, planes, 3, dk=2 * planes, dv=int(0.2 * planes), Nh=4, relative=True)
-
-        self.msvit2 = MsViTAA(self.inplanes, 128, stride=2, image_size=8, **kwargs)
+        self.layer1 = self._make_layer(block, 64, layers[0], image_size=8, **kwargs)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], image_size=8, **kwargs)
-        self.prjct2 = nn.Conv2d(256, 128, kernel_size=1, stride=1, bias=False)
-
-        self.msvit3 = MsViTAA(self.inplanes, 256, stride=2, image_size=4, **kwargs)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], image_size=4, **kwargs)
-        self.prjct3 = nn.Conv2d(512, 256, kernel_size=1, stride=1, bias=False)
-
-        self.msvit4 = MsViTAA(self.inplanes, 512, stride=2, image_size=2, **kwargs)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], image_size=2, **kwargs)
-        self.prjct4 = nn.Conv2d(1024, 512, kernel_size=1, stride=1, bias=False)
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -307,49 +341,10 @@ class ResNet(nn.Module):
         x = self.relu(x)
         x = self.maxpool(x)
 
-        # layer1
-        if self.enable_msvit and self.enable_conv:
-            attn_out = self.msvit1(x)
-            conv_out = self.layer1(x)
-            x = torch.cat((conv_out, attn_out), dim=1)
-            x = self.prjct1(x)
-        elif self.enable_msvit:
-            x = self.msvit1(x)
-        elif self.enable_conv:
-            x = self.layer1(x)
-
-        # layer2
-        if self.enable_msvit and self.enable_conv:
-            attn_out = self.msvit2(x)
-            conv_out = self.layer2(x)
-            x = torch.cat((conv_out, attn_out), dim=1)
-            x = self.prjct2(x)
-        elif self.enable_msvit:
-            x = self.msvit2(x)
-        elif self.enable_conv:
-            x = self.layer2(x)
-
-        # layer3
-        if self.enable_msvit and self.enable_conv:
-            attn_out = self.msvit3(x)
-            conv_out = self.layer3(x)
-            x = torch.cat((conv_out, attn_out), dim=1)
-            x = self.prjct3(x)
-        elif self.enable_msvit:
-            x = self.msvit3(x)
-        elif self.enable_conv:
-            x = self.layer3(x)
-
-        # layer4
-        if self.enable_msvit and self.enable_conv:
-            attn_out = self.msvit4(x)
-            conv_out = self.layer4(x)
-            x = torch.cat((conv_out, attn_out), dim=1)
-            x = self.prjct4(x)
-        elif self.enable_msvit:
-            x = self.msvit4(x)
-        elif self.enable_conv:
-            x = self.layer4(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)

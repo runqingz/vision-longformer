@@ -340,7 +340,7 @@ class MlpBlock(nn.Module):
         return x, nx, ny
 
 
-class MsViTAA(nn.Module):
+class MsViT(nn.Module):
     """ Multiscale Vision Transformer with support for patch or hybrid CNN input stage
     """
 
