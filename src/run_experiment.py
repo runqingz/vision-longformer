@@ -294,7 +294,8 @@ train_meters.close()
 for meter in test_meters:
     meter.close()
 
-summary(net, input_size=(1, 3, cfg.INPUT.IMAGE_SIZE, cfg.INPUT.IMAGE_SIZE))
+# Model evaluation
+torchinfo_summary = summary(net, input_size=(1, 3, cfg.INPUT.IMAGE_SIZE, cfg.INPUT.IMAGE_SIZE))
 input_ = torch.randn(1, 3, 32, 32).to(device)
 macs, params = get_model_complexity_info(net, (3, 32, 32), as_strings=True,
                                          print_per_layer_stat=True, verbose=True)
@@ -312,6 +313,16 @@ avg = avg / 100
 
 print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
 print('{:<30}  {:<8}'.format('Number of parameters: ', params))
-
 print('{:<30}  {:<8} ms'.format('Best process time: ', best))
 print('{:<30}  {:<8} ms'.format('Average process time: ', avg))
+
+# Save model evaluation results
+evaluation_filename = args.output_dir + '/evaluation_logs.txt'
+evaluation_file = open(evaluation_filename, 'w')
+print("Saving model evaluation logs to " + evaluation_filename)
+print(torchinfo_summary, file = evaluation_file)
+print('{:<30}  {:<8}'.format('Computational complexity: ', macs), file = evaluation_file)
+print('{:<30}  {:<8}'.format('Number of parameters: ', params), file = evaluation_file)
+print('{:<30}  {:<8} ms'.format('Best process time: ', best), file = evaluation_file)
+print('{:<30}  {:<8} ms'.format('Average process time: ', avg), file = evaluation_file)
+evaluation_file.close()
