@@ -65,6 +65,7 @@ parser.add_argument(
     default=None,
     nargs=argparse.REMAINDER,
 )
+parser.add_argument('--conv_type', type=str, default='conv', help="conv, msvit, msvitconv, aaconv")
 args = parser.parse_args()
 
 cfg.merge_from_file(args.config_file)
@@ -96,6 +97,7 @@ if args.seed != 0:
 
 cfg.DATA.PATH = args.data
 cfg.OUTPUT_DIR = args.output_dir
+cfg.MODEL.VIT.RESNET.CONV_TYPE = args.conv_type
 
 ##################### Data ############################
 logging.info('==> Preparing data..')
