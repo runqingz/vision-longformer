@@ -44,6 +44,7 @@ def build_model(cfg):
             norm_embed=cfg.MODEL.VIT.NORM_EMBED,
             avg_pool=cfg.MODEL.VIT.AVG_POOL,
         )
+        logging.info("=> creating model '{}'".format(cfg.MODEL.ARCH))
         if cfg.MODEL.ARCH.startswith('msvit'):
             args['arch'] = cfg.MODEL.VIT.MSVIT.ARCH
             args['sharew'] = cfg.MODEL.VIT.MSVIT.SHARE_W
@@ -53,9 +54,10 @@ def build_model(cfg):
             args['sw_exact'] = cfg.MODEL.VIT.MSVIT.SW_EXACT
             args['ln_eps'] = cfg.MODEL.VIT.MSVIT.LN_EPS
             args['mode'] = cfg.MODEL.VIT.MSVIT.MODE
+            logging.info("=> model attn type '{}'".format(cfg.MODEL.VIT.MSVIT.ATTN_TYPE))
         if 'resnet' in cfg.MODEL.ARCH:
             args['conv_type'] = cfg.MODEL.VIT.RESNET.CONV_TYPE
-        logging.info("=> creating model '{}'".format(cfg.MODEL.ARCH))
+            logging.info("=> model conv type '{}'".format(cfg.MODEL.VIT.RESNET.CONV_TYPE))
         net = vitmodeldict[cfg.MODEL.ARCH](num_classes=cfg.DATA.NUM_CLASSES, **args)
     else:
         raise ValueError(
