@@ -358,6 +358,7 @@ class MsViT(nn.Module):
                  attn_type='longformerhand', sw_exact=0, mode=0, **args):
         super().__init__()
         self.num_classes = num_classes
+        self.out_planes = out_planes
         if 'ln_eps' in args:
             ln_eps = args['ln_eps']
             self.norm_layer = partial(nn.LayerNorm, eps=ln_eps)
@@ -416,10 +417,9 @@ class MsViT(nn.Module):
             return layer_cfgs
 
         self.layer_cfgs = parse_arch(arch)
-        self.layer_cfgs[0]['d'] = out_planes
+        self.layer_cfgs[0]['d'] = self.out_planes
         self.num_layers = len(self.layer_cfgs)
         self.depth = sum([cfg['n'] for cfg in self.layer_cfgs])
-        self.out_planes = self.layer_cfgs[-1]['d']
         self.Nglos = [cfg['g'] for cfg in self.layer_cfgs]
         self.avg_pool = args['avg_pool'] if 'avg_pool' in args else False
 
