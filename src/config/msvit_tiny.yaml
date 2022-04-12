@@ -32,15 +32,15 @@ DATA:
   PATH: /home/rzhang/Dev/vision-longformer/datasets/cifar10
   #PATH: /home/rzhang/Dev/vision-longformer/datasets/imagenet/2012
   TARGETMAP: 
-  TEST: ('cifar',)
-  TRAIN: ('cifar',)
+  TEST: ('cifarxx',)
+  TRAIN: ('cifarxx',)
 DATALOADER:
-  BSZ: 8
+  BSZ: 4
   RE: 'no'
   WORKERS: 2
 DISTRIBUTED_BACKEND: nccl
 EVALUATE: False
-RESNET: True
+RESNET: False
 FINETUNE:
   FINETUNE: False
   USE_TRAIN_AUG: False
@@ -48,7 +48,7 @@ GATHER_ON_CPU: False
 INPUT:
   CROP_PCT: 0.875
   IMAGE_SIZE: 32
-  ATTN_SIZE: [8, 4]
+  ATTN_SIZE: [8, 8]
   INTERPOLATION: 3
   MEAN: [0.485, 0.456, 0.406]
   STD: [0.229, 0.224, 0.225]
@@ -65,20 +65,21 @@ MODEL:
   FREEZE_CONV_BODY_AT: -1
   NONLINEARITY: celu
   PRETRAINED: False
+  MODEL_PATH: /home/rzhang/Dev/vision-longformer/run/size/test27/model_best.pth 
   VIT:
     AVG_POOL: False
     DROP: 0.0
     DROP_PATH: 0.1
     MSVIT:
-      ARCH: l1,h1,d48,n1,s1,g1,p1,f7
-      ATTN_TYPE: longformerhand
+      ARCH: l1,h3,d96,n1,s1,g1,p1,f256_l2,h3,d192,n2,s1,g1,p2,f256
+      ATTN_TYPE: linformer
       LN_EPS: 1e-06
       ONLY_GLOBAL: False
       SHARE_KV: True
       SHARE_W: True
       SW_EXACT: 0
     NORM_EMBED: True
-ONLY_SAVE_LAST: 0
+ONLY_SAVE_LAST: 1
 OPTIM:
   ADAM:
     BETA1: 0.9
@@ -86,8 +87,9 @@ OPTIM:
     EPS: 1e-08
   DROP_FACTOR: 10.0
   DROP_FREQ: 30
-  EPOCHS: 50
+  EPOCHS: 1
   LR: 0.001
+  #LR: 1e-06
   MOM: 0.9
   NU: 1.0
   OPT: adamw
@@ -104,6 +106,7 @@ SOLVER:
   LR_POLICY: cosine
   MIN_LR: 1e-06
   USE_LARC: False
-  WARMUP_EPOCHS: 5.0
+  #WARMUP_EPOCHS: 5.0
+  WARMUP_EPOCHS: 0.0
   WARMUP_FACTOR: 0.002
   WARMUP_METHOD: linear

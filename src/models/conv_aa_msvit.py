@@ -457,9 +457,9 @@ class MsViTAA(nn.Module):
         self.res_layer1 = self._make_res_layer(BasicAABlock, 64, layers[0], attn_layer=0)
         #Attention input image dimension, this must match resnet output dimention
         
-        self.res_layer2 = self._make_res_layer(block, 128, layers[1], stride=2, dilate=False)
+        #self.res_layer2 = self._make_res_layer(block, 128, layers[1], stride=2, dilate=False)
 
-        #self.res_layer2 = self._make_res_layer(BasicAABlock, 128, layers[1], stride=2, dilate=False, attn_layer=1)
+        self.res_layer2 = self._make_res_layer(BasicAABlock, 128, layers[1], stride=2, dilate=False, attn_layer=1)
         
         self.res_layer3 = self._make_res_layer(block, 256, layers[2], stride=2, dilate=False)
         self.res_layer4 = self._make_res_layer(block, 512, layers[3], stride=2, dilate=False)
@@ -549,9 +549,16 @@ class MsViTAA(nn.Module):
             )
 
             self.inplanes = planes * block.expansion
+            
+            # self.Nx = self.attn_size[attn_layer]
+            # self.Ny = self.attn_size[attn_layer]
 
-            self.Nx = self.attn_size[attn_layer]
-            self.Ny = self.attn_size[attn_layer]
+            self.Nx = self.attn_size[attn_layer] // stride
+            self.Ny = self.attn_size[attn_layer] // stride
+
+            cfg = self.layer_cfgs[attn_layer]
+            cfg['p'] = 1
+
             aa_layer = self._make_layer(self.inplanes, self.layer_cfgs[attn_layer],
                                        dprs=self.dprs[attn_layer], layerid=attn_layer+1)
             norm = self.norm_layer(self.layer_cfgs[attn_layer]['d'])

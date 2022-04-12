@@ -97,6 +97,32 @@ def build_dataset(cfg, is_train=True):
                     root=cfg.DATA.PATH, train=False, download=True,
                     transform=transform_test
                 )
+        elif dataset_name == "cifarxx":
+            if is_train:
+                transform_train = transforms.Compose([
+                    transforms.RandomCrop(32, padding=4),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.Resize(32),
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                         (0.2023, 0.1994, 0.2010)),
+                ])
+                dataset = torchvision.datasets.CIFAR10(
+                    root=cfg.DATA.PATH, train=True, download=True,
+                    transform=transform_train
+                )
+            else:
+                transform_test = transforms.Compose([
+                    transforms.Resize(32),
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                         (0.2023, 0.1994, 0.2010)),
+                ])
+
+                dataset = torchvision.datasets.CIFAR10(
+                    root=cfg.DATA.PATH, train=False, download=True,
+                    transform=transform_test
+                )
         else:
             raise ValueError("Unimplemented dataset: {}".format(dataset_name))
 

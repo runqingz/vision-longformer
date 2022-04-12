@@ -135,7 +135,7 @@ class BasicAABlock(nn.Module):
 
         self.Nglos = Nglos
         # Attention Path
-        self.qkv_conv = conv3x3(inplanes, inplanes, stride)
+        #self.qkv_conv = conv3x3(inplanes, inplanes, stride)
         # Atten layers to replace CONV
         self.aa_layer = attention
         #Layer Norm
@@ -161,13 +161,15 @@ class BasicAABlock(nn.Module):
         out += identity
         out = self.relu(out)
         #Attention path
-        atten_out = self.qkv_conv(x)
-        B = atten_out.shape[0]
-        atten_out, nx, ny = self.aa_layer((atten_out, None, None))
+        # atten_out = self.qkv_conv(x)
+        # B = atten_out.shape[0]
+        # atten_out, nx, ny = self.aa_layer((atten_out, None, None))
+
+        B = x.shape[0]
+        atten_out, nx, ny = self.aa_layer((x, None, None))
         atten_out = self.attn_norm(atten_out)
 
         atten_out = atten_out[:, self.Nglos:].transpose(-2, -1).reshape(B, -1, nx, ny)
-
         out = torch.cat((out, atten_out), dim=1)
         out = self.projection(out)
 

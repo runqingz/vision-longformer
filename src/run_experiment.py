@@ -294,8 +294,8 @@ train_meters.close()
 for meter in test_meters:
     meter.close()
 
-summary(net, input_size=(1, 3, cfg.INPUT.IMAGE_SIZE, cfg.INPUT.IMAGE_SIZE))
-input_ = torch.randn(1, 3, 32, 32).to(device)
+summary(net, input_size=(4, 3, cfg.INPUT.IMAGE_SIZE, cfg.INPUT.IMAGE_SIZE ))
+input_ = torch.randn(4, 3, 32, 32).to(device)
 macs, params = get_model_complexity_info(net, (3, 32, 32), as_strings=True,
                                            print_per_layer_stat=True, verbose=True)
 
