@@ -57,3 +57,4 @@ src/run_exp_multi_node.py
 
 # custom
 cmd-example.txt
+venv/
