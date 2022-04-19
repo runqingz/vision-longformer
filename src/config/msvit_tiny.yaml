@@ -30,12 +30,11 @@ DATA:
   DATA_DIR: ./data
   NUM_CLASSES: 10
   PATH: /home/rzhang/Dev/vision-longformer/datasets/cifar10
-  #PATH: /home/rzhang/Dev/vision-longformer/datasets/imagenet/2012
   TARGETMAP: 
   TEST: ('cifar',)
   TRAIN: ('cifar',)
 DATALOADER:
-  BSZ: 4
+  BSZ: 32
   RE: 'no'
   WORKERS: 2
 DISTRIBUTED_BACKEND: nccl
@@ -71,7 +70,7 @@ MODEL:
     DROP: 0.0
     DROP_PATH: 0.1
     MSVIT:
-      ARCH: l1,h3,d96,n1,s1,g1,p4,f7_l2,h3,d192,n2,s1,g1,p2,f7
+      ARCH: l1,h3,d96,n1,s1,g1,p1,f7_l2,h3,d192,n2,s1,g1,p2,f7
       ATTN_TYPE: longformerhand
       LN_EPS: 1e-06
       ONLY_GLOBAL: False
@@ -87,7 +86,7 @@ OPTIM:
     EPS: 1e-08
   DROP_FACTOR: 10.0
   DROP_FREQ: 30
-  EPOCHS: 1
+  EPOCHS: 600
   LR: 0.001
   #LR: 1e-06
   MOM: 0.9
@@ -106,7 +105,6 @@ SOLVER:
   LR_POLICY: cosine
   MIN_LR: 1e-06
   USE_LARC: False
-  #WARMUP_EPOCHS: 5.0
-  WARMUP_EPOCHS: 0.0
+  WARMUP_EPOCHS: 5.0
   WARMUP_FACTOR: 0.002
   WARMUP_METHOD: linear
